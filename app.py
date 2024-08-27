@@ -5,56 +5,57 @@ import time
 # Set up Groq client (replace with your actual API key)
 client = groq.Client(api_key="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")
 
-def extract_key_points(argument):
+def generate_complete_response(system_message, user_message, model, max_tokens):
+    """Generates a complete response without truncation."""
     response = client.chat.completions.create(
         messages=[
-            {"role": "system", "content": "Extract 2-3 key points from the given argument."},
-            {"role": "user", "content": argument}
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message}
         ],
-        model="llama-3.1-70b-versatile",
-        max_tokens=100
+        model=model,
+        max_tokens=max_tokens
     )
-    return response.choices[0].message.content
+    result = response.choices[0].message.content.strip()
+
+    while not result.endswith(('.', '!', '?')):
+        additional_response = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": "Continue the previous response."},
+                {"role": "user", "content": result}
+            ],
+            model=model,
+            max_tokens=max_tokens
+        )
+        result += " " + additional_response.choices[0].message.content.strip()
+        
+    return result
+
+def extract_key_points(argument):
+    system_message = "Extract 2-3 key points from the given argument."
+    return generate_complete_response(system_message, argument, model="llama-3.1-70b-versatile", max_tokens=100)
 
 def generate_argument(prompt, stance, previous_arguments=""):
-    response = client.chat.completions.create(
-        messages=[
-            {"role": "system",
-             "content": f"You are an aggressive debater. Strongly argue {stance} the given situation, directly challenging and contradicting your opponent's points. Be confrontational and pick apart their arguments."},
-            {"role": "user", "content": f"Situation: {prompt}\n\nPrevious arguments:\n{previous_arguments}"}
-        ],
-        model="llama-3.1-70b-versatile",
-        max_tokens=200
-    )
-    return response.choices[0].message.content
+    system_message = (f"You are an aggressive debater. Strongly argue {stance} the given situation, directly "
+                      f"challenging and contradicting your opponent's points. Be confrontational and pick apart their arguments.")
+    user_message = f"Situation: {prompt}\n\nPrevious arguments:\n{previous_arguments}"
+    return generate_complete_response(system_message, user_message, model="llama-3.1-70b-versatile", max_tokens=200)
 
 def determine_winner_and_summarize(prompt, debate_transcript):
-    winner_response = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": "Determine the winner of the debate based on the strength of arguments."},
-            {"role": "user", "content": f"Situation: {prompt}\n\nDebate transcript:\n{debate_transcript}"}
-        ],
+    winner_response = generate_complete_response(
+        "Determine the winner of the debate based on the strength of arguments.",
+        f"Situation: {prompt}\n\nDebate transcript:\n{debate_transcript}",
         model="llama-3.1-70b-versatile",
         max_tokens=50
     )
-    winner = winner_response.choices[0].message.content
-
-    summary_response = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": "Provide 2-3 key points summarizing the debate."},
-            {"role": "user", "content": f"Situation: {prompt}\n\nDebate transcript:\n{debate_transcript}"}
-        ],
+    summary_response = generate_complete_response(
+        "Provide 2-3 key points summarizing the debate.",
+        f"Situation: {prompt}\n\nDebate transcript:\n{debate_transcript}",
         model="llama-3.1-70b-versatile",
         max_tokens=200
     )
-    summary = summary_response.choices[0].message.content
+    return f"Winner: {winner_response}\n\n{summary_response}"
 
-    return f"Winner: {winner}\n\n{summary}"
-
-def check_truncation(text):
-    if text.endswith((".", "!", "?")):
-        return text
-    return text + " [Response may be truncated]"
+# The rest of your Streamlit app remains unchanged...
 
 st.title("Nivan - Fight Club")
 
@@ -120,7 +121,7 @@ else:
             st.subheader("Debate Result and Key Points:")
             with st.spinner("Determining winner and summarizing..."):
                 result = determine_winner_and_summarize(st.session_state.situation, st.session_state.debate_transcript)
-            st.write(check_truncation(result))
+            st.write(result)
 
             if st.button("Start New Debate"):
                 for key in list(st.session_state.keys()):
@@ -181,40 +182,20 @@ else:
                     if st.button("Submit", key=f"submit_human_{st.session_state.round}"):
                         st.session_state.human_argument = human_argument
                         st.session_state.debate_transcript += f"Human: {human_argument}\n\n"
-                        if st.session_state.round < 3:
+                        st.rerun()
+                else:
+                    st.write("Human:", st.session_state.human_argument)
+                    if st.session_state.round < 3:
+                        if st.button("Next Round", key=f"next_round_{st.session_state.round}"):
                             st.session_state.round += 1
+                            st.session_state.human_argument = ""
                             st.session_state.ai_response = ""
                             st.rerun()
-                        else:
-                            st.rerun()
-
-        if st.session_state.round > 3:
-            st.subheader("Debate Result and Key Points:")
-            with st.spinner("Determining winner and summarizing..."):
-                result = determine_winner_and_summarize(st.session_state.situation, st.session_state.debate_transcript)
-            st.write(check_truncation(result))
-
-            if st.button("Start New Debate"):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
 
     elif st.session_state.debate_type == "Human vs Human":
-        if st.session_state.round <= 3:
-            human_a_argument = st.text_area(f"Round {st.session_state.round}: Human A argument:")
-            human_b_argument = st.text_area(f"Round {st.session_state.round}: Human B argument:")
-            if st.button("Submit Round", key=f"submit_round_{st.session_state.round}"):
-                st.session_state.debate_transcript += f"Human A: {human_a_argument}\n\n"
-                st.session_state.debate_transcript += f"Human B: {human_b_argument}\n\n"
-                st.session_state.round += 1
-                st.rerun()
-        else:
-            st.subheader("Debate Result and Key Points:")
-            with st.spinner("Determining winner and summarizing..."):
-                result = determine_winner_and_summarize(st.session_state.situation, st.session_state.debate_transcript)
-            st.write(check_truncation(result))
+        st.write("This mode is under development.")
+        if st.button("Start New Debate"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
 
-            if st.button("Start New Debate"):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
