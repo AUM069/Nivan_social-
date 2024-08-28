@@ -3,7 +3,7 @@ import groq
 import time
 
 # Set up Groq client (replace with your actual API key)
-client = groq.Client(api_key="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")
+client = groq.Client(api_key="")
 
 def extract_key_points(argument):
     response = client.chat.completions.create(
