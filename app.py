@@ -126,10 +126,10 @@ def run_flow(
         raise ConnectionError(f"Error connecting to API: {str(e)}")
 
 def main():
-    st.set_page_config(page_title="Langflow RAG Interface", page_icon="🤖", layout="wide")
+    st.set_page_config(page_title="Nivan analyst", page_icon="🤖", layout="wide")
 
     # Title and description
-    st.title(" Nivan ")
+    st.title(" Nivan analyst")
     st.markdown("lets talk about social media analytics .")
 
     # Initialize chat history
