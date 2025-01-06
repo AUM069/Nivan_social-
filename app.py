@@ -16,7 +16,7 @@ except ImportError:
 BASE_API_URL = "https://api.langflow.astra.datastax.com"
 LANGFLOW_ID = "1b62669e-a172-4ece-8ad1-29334cfb2969"
 FLOW_ID = "5dcd5e99-e53e-4e16-8c25-2e22e12db12e"
-APPLICATION_TOKEN = "AstraCS:yndrsSOMtiCtHZmEzovAlGFa:d20ca989d241cf8edce9ac31b544a481c1fc6982b6a32b24705065faaa346ab6"
+APPLICATION_TOKEN = "AstraCS:lDkpyulHPQvXSIMtYJyxtDQQ:90eddc6628e4da07a516976293e7c7040baaf690c3b3a1e7cf5bbfba724358f9"
 
 # Default tweaks from your code
 DEFAULT_TWEAKS = {
