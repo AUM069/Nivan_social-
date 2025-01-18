@@ -628,13 +628,13 @@ def main():
                     st.markdown(analysis)
 
         
-    with tabs[3]:
-        st.header("Palm Reading")
-        uploaded_file = st.file_uploader("Upload palm image", type=["jpg", "jpeg", "png"])
+      with tabs[3]:
+          st.header("Palm Reading")
+          uploaded_file = st.file_uploader("Upload palm image", type=["jpg", "jpeg", "png"])
 
-        if uploaded_file:
-            image = Image.open(uploaded_file)
-            cols = st.columns(2)
+          if uploaded_file:
+             image = Image.open(uploaded_file)
+             cols = st.columns(2)
 
             with cols[0]:
                 # Updated deprecated parameter
