@@ -37,51 +37,79 @@ def chunk_content(content: str, chunk_size: int = 7500) -> List[str]:
     return [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)]
 
 
-def store_response(collection, response_type: str, content: str, **metadata) -> str:
-    """Store response in chunks if necessary"""
-    chunks = chunk_content(content)
-
-    # Create a unique identifier for this set of chunks
-    chunk_id = f"{response_type}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-
-    # Store each chunk
-    for i, chunk in enumerate(chunks):
-        document = {
-            'type': response_type,
-            'chunk_id': chunk_id,
-            'chunk_index': i,
-            'content': chunk,
-            'total_chunks': len(chunks),
-            **metadata
-        }
-        collection.insert_one(document)
-
-    return chunk_id
-
-
 def retrieve_response(collection, response_type: str, **query_params) -> str:
-    """Retrieve and reconstruct chunked response"""
-    # First, try to find any matching document
-    first_chunk = collection.find_one({
-        'type': response_type,
-        **query_params
-    })
+    """Retrieve and reconstruct chunked response with improved error handling"""
+    try:
+        # First, try to find any matching document
+        first_chunk = collection.find_one({
+            'type': response_type,
+            **query_params
+        })
 
-    if not first_chunk:
+        if not first_chunk:
+            return None
+
+        # If there's only one chunk, return it directly
+        if 'chunk_id' not in first_chunk:
+            return first_chunk['content']
+
+        # Otherwise, retrieve all chunks and reconstruct
+        chunks = list(collection.find({
+            'type': response_type,
+            'chunk_id': first_chunk['chunk_id']
+        }).sort([('chunk_index', 1)]))  # Materialize the cursor into a list
+
+        # Verify we have all chunks
+        if not chunks:
+            return None
+            
+        expected_chunks = first_chunk['total_chunks']
+        if len(chunks) != expected_chunks:
+            return None
+
+        # Reconstruct content
+        sorted_chunks = sorted(chunks, key=lambda x: x['chunk_index'])
+        return ''.join(chunk['content'] for chunk in sorted_chunks)
+
+    except Exception as e:
+        print(f"Error retrieving response: {str(e)}")
         return None
 
-    # If there's only one chunk, return it directly
-    if 'chunk_id' not in first_chunk:
-        return first_chunk['content']
+def store_response(collection, response_type: str, content: str, **metadata) -> str:
+    """Store response in chunks with improved error handling"""
+    try:
+        chunks = chunk_content(content)
+        chunk_id = f"{response_type}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    # Otherwise, retrieve all chunks and reconstruct
-    # Fixed the sort syntax to use a list of tuples
-    chunks = collection.find({
-        'type': response_type,
-        'chunk_id': first_chunk['chunk_id']
-    }).sort([('chunk_index', 1)])  # Changed this line to use correct sort syntax
+        # Store each chunk with retries
+        for i, chunk in enumerate(chunks):
+            max_retries = 3
+            retry_count = 0
+            
+            while retry_count < max_retries:
+                try:
+                    document = {
+                        'type': response_type,
+                        'chunk_id': chunk_id,
+                        'chunk_index': i,
+                        'content': chunk,
+                        'total_chunks': len(chunks),
+                        'timestamp': datetime.datetime.now().isoformat(),
+                        **metadata
+                    }
+                    collection.insert_one(document)
+                    break
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count == max_retries:
+                        raise e
+                    time.sleep(1)  # Wait before retry
 
-    return ''.join(chunk['content'] for chunk in chunks)
+        return chunk_id
+
+    except Exception as e:
+        print(f"Error storing response: {str(e)}")
+        return None
 
 
 # Constants
