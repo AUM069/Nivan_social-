@@ -627,22 +627,25 @@ def main():
                     analysis = generate_kundali(dob, time_of_birth, language_code)
                     st.markdown(analysis)
 
-        with tabs[3]:
-            st.header("Palm Reading")
-            uploaded_file = st.file_uploader("Upload palm image", type=["jpg", "jpeg", "png"])
+        
+    with tabs[3]:
+        st.header("Palm Reading")
+        uploaded_file = st.file_uploader("Upload palm image", type=["jpg", "jpeg", "png"])
 
-            if uploaded_file:
-                image = Image.open(uploaded_file)
-                cols = st.columns(2)
+        if uploaded_file:
+            image = Image.open(uploaded_file)
+            cols = st.columns(2)
 
-                with cols[0]:
-                    st.image(image, caption="Your Palm Image", use_column_width=True)
+            with cols[0]:
+                # Updated deprecated parameter
+                st.image(image, caption="Your Palm Image", use_container_width=True)
 
-                with cols[1]:
-                    if st.button("Analyze Palm", key="palm_btn"):
-                        with st.spinner("Analyzing your palm..."):
-                            reading = analyze_palm_image(image, language_code)
-                            st.markdown(reading)
+            with cols[1]:
+                if st.button("Analyze Palm", key="palm_btn"):
+                    with st.spinner("Analyzing your palm..."):
+                        reading = analyze_palm_image(image, language_code)
+                        st.markdown(reading)
+
 
         with tabs[4]:
             st.header("Meditation Guidance")
