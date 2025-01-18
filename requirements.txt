@@ -1,9 +1,4 @@
 streamlit
-pandas
-Pillow
-requests
-pytz
 groq
 astrapy
-hashlib
 
