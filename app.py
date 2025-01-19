@@ -689,7 +689,7 @@ def main():
     st.markdown("---")
     st.markdown(
         f"""
-            💫 ** Karmakode - Your AI Spiritual Guide**
+            💫  Karmakode - Your AI Spiritual Guide
 
             Powered by advanced AI for personalized spiritual insights in {language_code}. Remember that while technology can provide guidance, 
             your intuition and personal wisdom are your best guides on your spiritual journey.
