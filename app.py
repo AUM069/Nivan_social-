@@ -10,7 +10,6 @@ import pytz
 from groq import Groq
 from astrapy import DataAPIClient
 import hashlib
-import time
 
 # Constants
 GROQ_API_KEY = "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"
@@ -31,10 +30,12 @@ except Exception:
     db_astra.create_collection('soul')
     print("Created 'soul' collection.")
 
+
 # Helper functions for chunking and storing data
 def chunk_content(content: str, chunk_size: int = 7500) -> List[str]:
     """Split content into chunks that fit within Astra DB's size limits"""
     return [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)]
+
 
 def retrieve_response(collection, response_type: str, **query_params) -> str:
     """Retrieve and reconstruct chunked response with improved error handling"""
@@ -70,8 +71,9 @@ def retrieve_response(collection, response_type: str, **query_params) -> str:
         sorted_chunks = sorted(chunks, key=lambda x: x['chunk_index'])
         return ''.join(chunk['content'] for chunk in sorted_chunks)
 
-    except Exception:
-        return handle_server_overload()
+    except Exception as e:
+        print(f"Error retrieving response: {str(e)}")
+        return None
 
 def store_response(collection, response_type: str, content: str, **metadata) -> str:
     """Store response in chunks with improved error handling"""
@@ -97,16 +99,18 @@ def store_response(collection, response_type: str, content: str, **metadata) -> 
                     }
                     collection.insert_one(document)
                     break
-                except Exception:
+                except Exception as e:
                     retry_count += 1
                     if retry_count == max_retries:
-                        return handle_server_overload()
+                        raise e
                     time.sleep(1)  # Wait before retry
 
         return chunk_id
 
-    except Exception:
-        return handle_server_overload()
+    except Exception as e:
+        print(f"Error storing response: {str(e)}")
+        return None
+
 
 # Constants
 ZODIAC_DATES = [
@@ -143,10 +147,6 @@ LANGUAGES = {
     "English": "en"
 }
 
-# New function to handle server overload errors
-def handle_server_overload():
-    """Display a message when the server is overloaded."""
-    return "The server is overloaded. Please refresh the page and try again later. Thank you for your service."
 
 @st.cache_data(ttl=3600)
 def get_groq_response(prompt: str, language_code: str) -> str:
@@ -176,8 +176,11 @@ def get_groq_response(prompt: str, language_code: str) -> str:
             st.warning("The response may be incomplete. Please try regenerating.")
 
         return response
-    except Exception:
-        return handle_server_overload()
+    except Exception as e:
+        error_msg = f"Error generating response: {str(e)}. Please try again later."
+        st.error(error_msg)
+        return error_msg
+
 
 def user_details_sidebar() -> tuple:
     """Create and handle the sidebar for user details input"""
@@ -197,6 +200,7 @@ def user_details_sidebar() -> tuple:
 
     return name, dob, time_of_birth, gender, state, city, LANGUAGES[language]
 
+
 def get_zodiac_sign(dob: datetime.date) -> str:
     """Determine zodiac sign based on date of birth"""
     day = dob.day
@@ -210,371 +214,354 @@ def get_zodiac_sign(dob: datetime.date) -> str:
         return "Capricorn"
     return "Unknown"
 
+
 def get_daily_horoscope(sign: str, language_code: str) -> str:
     """Generate or fetch detailed daily horoscope"""
     collection = db_astra.get_collection('soul')
     today = datetime.date.today().isoformat()
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'daily_horoscope',
-            sign=sign,
-            language=language_code,
-            date=today
-        )
+    existing = retrieve_response(
+        collection,
+        'daily_horoscope',
+        sign=sign,
+        language=language_code,
+        date=today
+    )
 
-        if existing:
-            return existing
+    if existing:
+        return existing
 
-        prompt = f"""As an expert astrologer, provide a comprehensive daily horoscope for {sign} in {language_code}.
-        Include these detailed sections:
+    prompt = f"""As an expert astrologer, provide a comprehensive daily horoscope for {sign} in {language_code}.
+    Include these detailed sections:
 
-        General Outlook:
-        - Overall energy and influences for the day
-        - Key opportunities and challenges
-        - Planetary influences affecting your sign
+    General Outlook:
+    - Overall energy and influences for the day
+    - Key opportunities and challenges
+    - Planetary influences affecting your sign
 
-        Love & Relationships:
-        - Romantic prospects and partner dynamics
-        - Family and friendship insights
-        - Social interactions and opportunities
+    Love & Relationships:
+    - Romantic prospects and partner dynamics
+    - Family and friendship insights
+    - Social interactions and opportunities
 
-        Career & Money:
-        - Professional opportunities and challenges
-        - Financial trends and advice
-        - Workplace dynamics and project outcomes
+    Career & Money:
+    - Professional opportunities and challenges
+    - Financial trends and advice
+    - Workplace dynamics and project outcomes
 
-        Health & Wellness:
-        - Physical and mental well-being
-        - Energy levels and stress management
-        - Wellness recommendations"""
+    Health & Wellness:
+    - Physical and mental well-being
+    - Energy levels and stress management
+    - Wellness recommendations"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'daily_horoscope',
-            response,
-            sign=sign,
-            language=language_code,
-            date=today
-        )
+    store_response(
+        collection,
+        'daily_horoscope',
+        response,
+        sign=sign,
+        language=language_code,
+        date=today
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def get_gemstone_recommendation(sign: str, language_code: str) -> str:
     """Get comprehensive gemstone recommendations with language preference"""
     collection = db_astra.get_collection('soul')
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'gemstone_recommendation',
-            sign=sign,
-            language=language_code
-        )
+    existing = retrieve_response(
+        collection,
+        'gemstone_recommendation',
+        sign=sign,
+        language=language_code
+    )
 
-        if existing:
-            return existing
+    if existing:
+        return existing
 
-        prompt = f"""As an expert gemologist and astrologer, provide detailed gemstone recommendations for {sign} in {language_code}.
-        Include these comprehensive sections:
+    prompt = f"""As an expert gemologist and astrologer, provide detailed gemstone recommendations for {sign} in {language_code}.
+    Include these comprehensive sections:
 
-        Primary Gemstones:
-        - Detailed description of main recommended stones
-        - Specific metaphysical properties
-        - Astrological significance
-        - Quality indicators to look for
+    Primary Gemstones:
+    - Detailed description of main recommended stones
+    - Specific metaphysical properties
+    - Astrological significance
+    - Quality indicators to look for
 
-        Wearing Guidelines:
-        - Best metals for setting
-        - Specific fingers for different stones
-        - Most auspicious times to start wearing
-        - Required rituals or preparations"""
+    Wearing Guidelines:
+    - Best metals for setting
+    - Specific fingers for different stones
+    - Most auspicious times to start wearing
+    - Required rituals or preparations"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'gemstone_recommendation',
-            response,
-            sign=sign,
-            language=language_code
-        )
+    store_response(
+        collection,
+        'gemstone_recommendation',
+        response,
+        sign=sign,
+        language=language_code
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def generate_kundali(dob: datetime.date, time_of_birth: datetime.time, language_code: str) -> str:
     """Generate comprehensive kundali analysis with language preference"""
     collection = db_astra.get_collection('soul')
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'kundali_analysis',
-            dob=dob.isoformat(),
-            time_of_birth=time_of_birth.isoformat(),
-            language=language_code
-        )
+    existing = retrieve_response(
+        collection,
+        'kundali_analysis',
+        dob=dob.isoformat(),
+        time_of_birth=time_of_birth.isoformat(),
+        language=language_code
+    )
 
-        if existing:
-            return existing
+    if existing:
+        return existing
 
-        prompt = f"""As a Vedic astrology expert, provide a detailed kundali analysis for:
-        Date: {dob}
-        Time: {time_of_birth}
-        in {language_code}.
+    prompt = f"""As a Vedic astrology expert, provide a detailed kundali analysis for:
+    Date: {dob}
+    Time: {time_of_birth}
+    in {language_code}.
 
-        Please include these comprehensive sections:
+    Please include these comprehensive sections:
 
-        Planetary Positions:
-        - Detailed analysis of all major planets
-        - House positions and their significance
-        - Key conjunctions and aspects
-        - Dasha periods and their effects"""
+    Planetary Positions:
+    - Detailed analysis of all major planets
+    - House positions and their significance
+    - Key conjunctions and aspects
+    - Dasha periods and their effects"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'kundali_analysis',
-            response,
-            dob=dob.isoformat(),
-            time_of_birth=time_of_birth.isoformat(),
-            language=language_code
-        )
+    store_response(
+        collection,
+        'kundali_analysis',
+        response,
+        dob=dob.isoformat(),
+        time_of_birth=time_of_birth.isoformat(),
+        language=language_code
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def analyze_palm_image(image: Image, language_code: str) -> str:
     """Generate detailed palm reading analysis with language preference"""
     image_hash = hashlib.sha256(image.tobytes()).hexdigest()
     collection = db_astra.get_collection('soul')
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'palm_reading',
-            image_hash=image_hash,
-            language=language_code
-        )
+    existing = retrieve_response(
+        collection,
+        'palm_reading',
+        image_hash=image_hash,
+        language=language_code
+    )
 
-        if existing:
-            return existing
+    if existing:
+        return existing
 
-        prompt = f"""As an experienced palmist, provide a comprehensive palm reading in {language_code}:
+    prompt = f"""As an experienced palmist, provide a comprehensive palm reading in {language_code}:
 
-        Major Lines Analysis:
-        - Life Line: Length, quality, branches, and islands
-        - Heart Line: Shape, depth, and special markings
-        - Head Line: Path, breaks, and connections
-        - Fate Line: Presence, strength, and variations"""
+    Major Lines Analysis:
+    - Life Line: Length, quality, branches, and islands
+    - Heart Line: Shape, depth, and special markings
+    - Head Line: Path, breaks, and connections
+    - Fate Line: Presence, strength, and variations"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'palm_reading',
-            response,
-            image_hash=image_hash,
-            language=language_code
-        )
+    store_response(
+        collection,
+        'palm_reading',
+        response,
+        image_hash=image_hash,
+        language=language_code
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def get_meditation_guidance(sign: str, language_code: str) -> str:
     """Provide meditation guidance based on zodiac sign with language preference"""
     collection = db_astra.get_collection('soul')
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'meditation_guidance',
-            sign=sign,
-            language=language_code
-        )
+    existing = retrieve_response(
+        collection,
+        'meditation_guidance',
+        sign=sign,
+        language=language_code
+    )
 
-        if existing:
-            return existing
+    if existing:
+        return existing
 
-        prompt = f"""Provide meditation guidance tailored for {sign} in {language_code}. Include:
-        - Type of meditation (e.g., mindfulness, visualization)
-        - Focus points or mantras
-        - Duration and frequency suggestions
-        - Tips for achieving deeper states of meditation
-        - Benefits specific to the zodiac sign's characteristics"""
+    prompt = f"""Provide meditation guidance tailored for {sign} in {language_code}. Include:
+    - Type of meditation (e.g., mindfulness, visualization)
+    - Focus points or mantras
+    - Duration and frequency suggestions
+    - Tips for achieving deeper states of meditation
+    - Benefits specific to the zodiac sign's characteristics"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'meditation_guidance',
-            response,
-            sign=sign,
-            language=language_code
-        )
+    store_response(
+        collection,
+        'meditation_guidance',
+        response,
+        sign=sign,
+        language=language_code
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def get_workout_recommendations(sign: str, language_code: str) -> str:
     """Generate workout recommendations based on zodiac sign with language preference"""
     collection = db_astra.get_collection('soul')
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'workout_recommendation',
-            sign=sign,
-            language=language_code
-        )
+    existing = retrieve_response(
+        collection,
+        'workout_recommendation',
+        sign=sign,
+        language=language_code
+    )
 
-        if existing:
-            return existing
+    if existing:
+        return existing
 
-        prompt = f"""Provide workout recommendations for {sign} in {language_code}. Include:
-        - Types of exercises (e.g., yoga, strength training, cardio)
-        - Specific exercises or routines
-        - How often to exercise
-        - Benefits linked to the zodiac sign's traits
-        - Considerations for physical and mental balance"""
+    prompt = f"""Provide workout recommendations for {sign} in {language_code}. Include:
+    - Types of exercises (e.g., yoga, strength training, cardio)
+    - Specific exercises or routines
+    - How often to exercise
+    - Benefits linked to the zodiac sign's traits
+    - Considerations for physical and mental balance"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'workout_recommendation',
-            response,
-            sign=sign,
-            language=language_code
-        )
+    store_response(
+        collection,
+        'workout_recommendation',
+        response,
+        sign=sign,
+        language=language_code
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def predict_future_triggers(sign: str, language_code: str) -> str:
     """Predict future astrological triggers and how to prepare for them"""
     collection = db_astra.get_collection('soul')
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'future_triggers',
-            sign=sign,
-            language=language_code
-        )
+    existing = retrieve_response(
+        collection,
+        'future_triggers',
+        sign=sign,
+        language=language_code
+    )
 
-        if existing:
-            return existing
+    if existing:
+        return existing
 
-        prompt = f"""For {sign}, predict potential astrological triggers in the near future in {language_code}. Include:
-        - Types of triggers (e.g., planetary transits, retrogrades)
-        - Expected impacts on life areas (career, relationships, health)
-        - Strategies or preventive measures to manage these triggers
-        - Timing of these events if possible"""
+    prompt = f"""For {sign}, predict potential astrological triggers in the near future in {language_code}. Include:
+    - Types of triggers (e.g., planetary transits, retrogrades)
+    - Expected impacts on life areas (career, relationships, health)
+    - Strategies or preventive measures to manage these triggers
+    - Timing of these events if possible"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'future_triggers',
-            response,
-            sign=sign,
-            language=language_code
-        )
+    store_response(
+        collection,
+        'future_triggers',
+        response,
+        sign=sign,
+        language=language_code
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def get_pooja_recommendation(sign: str, language_code: str) -> str:
     """Provide Pooja recommendations based on zodiac sign"""
     collection = db_astra.get_collection('soul')
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'pooja_recommendation',
-            sign=sign,
-            language=language_code
-        )
-        if existing:
-            return existing
+    existing = retrieve_response(
+        collection,
+        'pooja_recommendation',
+        sign=sign,
+        language=language_code
+    )
+    if existing:
+        return existing
 
-        prompt = f"""For {sign}, recommend specific Poojas or rituals in {language_code}. Include:
-            - Types of Poojas or rituals recommended for spiritual growth
-            - When to perform these Poojas (e.g., days of the week, specific times)
-            - Mantras, offerings, or deities to focus on
-            - The purpose or expected benefits of each Pooja
-            - Any precautions or preparations needed"""
+    prompt = f"""For {sign}, recommend specific Poojas or rituals in {language_code}. Include:
+        - Types of Poojas or rituals recommended for spiritual growth
+        - When to perform these Poojas (e.g., days of the week, specific times)
+        - Mantras, offerings, or deities to focus on
+        - The purpose or expected benefits of each Pooja
+        - Any precautions or preparations needed"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'pooja_recommendation',
-            response,
-            sign=sign,
-            language=language_code
-        )
+    store_response(
+        collection,
+        'pooja_recommendation',
+        response,
+        sign=sign,
+        language=language_code
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def spiritual_chatbot(query: str, sign: str, language_code: str) -> str:
     """Handle spiritual queries through a chatbot with zodiac context"""
     collection = db_astra.get_collection('soul')
 
-    try:
-        existing = retrieve_response(
-            collection,
-            'spiritual_chatbot',
-            query=query,
-            sign=sign,
-            language=language_code
-        )
+    existing = retrieve_response(
+        collection,
+        'spiritual_chatbot',
+        query=query,
+        sign=sign,
+        language=language_code
+    )
 
-        if existing:
-            return existing
+    if existing:
+        return existing
 
-        if "marriage" in query.lower() or "ex" in query.lower():
-            prompt = f"""As a spiritual guide and astrologer, provide an analysis for someone with the zodiac sign {sign} regarding '{query}' in {language_code}. Include:
-                - Astrological insights based on current and upcoming planetary transits
-                - Predict a specific date or time frame for the event if possible
-                - Explain the astrological influences that might lead to this event
-                - Offer practical spiritual steps or considerations for preparation or action"""
-        else:
-            prompt = f"""As a spiritual guide, respond to this query for someone with the zodiac sign {sign} in {language_code}: '{query}'. Use your knowledge of astrology to:
-                - Provide insightful answers or advice related to the zodiac traits
-                - Include any relevant astrological prediction or influence if applicable
-                - Offer practical spiritual steps or considerations tailored to this sign"""
+    if "marriage" in query.lower() or "ex" in query.lower():
+        prompt = f"""As a spiritual guide and astrologer, provide an analysis for someone with the zodiac sign {sign} regarding '{query}' in {language_code}. Include:
+            - Astrological insights based on current and upcoming planetary transits
+            - Predict a specific date or time frame for the event if possible
+            - Explain the astrological influences that might lead to this event
+            - Offer practical spiritual steps or considerations for preparation or action"""
+    else:
+        prompt = f"""As a spiritual guide, respond to this query for someone with the zodiac sign {sign} in {language_code}: '{query}'. Use your knowledge of astrology to:
+            - Provide insightful answers or advice related to the zodiac traits
+            - Include any relevant astrological prediction or influence if applicable
+            - Offer practical spiritual steps or considerations tailored to this sign"""
 
-        response = get_groq_response(prompt, language_code)
+    response = get_groq_response(prompt, language_code)
 
-        store_response(
-            collection,
-            'spiritual_chatbot',
-            response,
-            query=query,
-            sign=sign,
-            language=language_code
-        )
+    store_response(
+        collection,
+        'spiritual_chatbot',
+        response,
+        query=query,
+        sign=sign,
+        language=language_code
+    )
 
-        return response
-    except Exception:
-        return handle_server_overload()
+    return response
+
 
 def display_zodiac_info(sign: str):
     """Display comprehensive zodiac sign information"""
@@ -595,6 +582,7 @@ def display_zodiac_info(sign: str):
             st.write("**Compatible Signs:**")
             for compatible in info['compatible_signs']:
                 st.write(f"- {compatible}")
+
 
 def main():
     st.set_page_config(
@@ -622,10 +610,7 @@ def main():
             if st.button("Generate Horoscope", key="horoscope_btn"):
                 with st.spinner("Generating your personalized horoscope..."):
                     horoscope = get_daily_horoscope(sign, language_code)
-                    if horoscope != handle_server_overload():
-                        st.markdown(horoscope)
-                    else:
-                        st.error(horoscope)
+                    st.markdown(horoscope)
                     display_zodiac_info(sign)
 
         with tabs[1]:
@@ -633,80 +618,62 @@ def main():
             if st.button("Get Recommendations", key="gemstone_btn"):
                 with st.spinner("Analyzing your gemstone compatibility..."):
                     recommendations = get_gemstone_recommendation(sign, language_code)
-                    if recommendations != handle_server_overload():
-                        st.markdown(recommendations)
-                    else:
-                        st.error(recommendations)
+                    st.markdown(recommendations)
 
         with tabs[2]:
             st.header("Kundali Analysis")
             if st.button("Generate Kundali", key="kundali_btn"):
                 with st.spinner("Generating your kundali analysis..."):
                     analysis = generate_kundali(dob, time_of_birth, language_code)
-                    if analysis != handle_server_overload():
-                        st.markdown(analysis)
-                    else:
-                        st.error(analysis)
+                    st.markdown(analysis)
 
+        
         with tabs[3]:
             st.header("Palm Reading")
             uploaded_file = st.file_uploader("Upload palm image", type=["jpg", "jpeg", "png"])
 
             if uploaded_file:
-                image = Image.open(uploaded_file)
-                cols = st.columns(2)
+               image = Image.open(uploaded_file)
+               cols = st.columns(2)
 
-                with cols[0]:
-                    st.image(image, caption="Your Palm Image", use_container_width=True)
+               with cols[0]:
+                # Updated deprecated parameter
+                  st.image(image, caption="Your Palm Image", use_container_width=True)
 
-                with cols[1]:
-                    if st.button("Analyze Palm", key="palm_btn"):
+               with cols[1]:
+                   if st.button("Analyze Palm", key="palm_btn"):
                         with st.spinner("Analyzing your palm..."):
                             reading = analyze_palm_image(image, language_code)
-                            if reading != handle_server_overload():
-                                st.markdown(reading)
-                            else:
-                                st.error(reading)
+                            st.markdown(reading)
+
 
         with tabs[4]:
             st.header("Meditation Guidance")
             if st.button("Get Meditation Guidance", key="meditation_btn"):
                 with st.spinner("Fetching your meditation guidance..."):
                     guidance = get_meditation_guidance(sign, language_code)
-                    if guidance != handle_server_overload():
-                        st.markdown(guidance)
-                    else:
-                        st.error(guidance)
+                    st.markdown(guidance)
 
         with tabs[5]:
             st.header("Workout Recommendations")
             if st.button("Get Workout Recommendations", key="workout_btn"):
                 with st.spinner("Generating workout recommendations..."):
                     workout = get_workout_recommendations(sign, language_code)
-                    if workout != handle_server_overload():
-                        st.markdown(workout)
-                    else:
-                        st.error(workout)
+                    st.markdown(workout)
 
         with tabs[6]:
             st.header("Predictive Triggers")
             if st.button("View Future Triggers", key="triggers_btn"):
                 with st.spinner("Looking into the astral forecast..."):
                     triggers = predict_future_triggers(sign, language_code)
-                    if triggers != handle_server_overload():
-                        st.markdown(triggers)
-                    else:
-                        st.error(triggers)
+                    st.markdown(triggers)
 
         with tabs[7]:
             st.header("Pooja Recommendations")
             if st.button("Get Pooja Recommendations", key="pooja_btn"):
                 with st.spinner("Consulting the sacred texts..."):
                     pooja = get_pooja_recommendation(sign, language_code)
-                    if pooja != handle_server_overload():
-                        st.markdown(pooja)
-                    else:
-                        st.error(pooja)
+                    st.markdown(pooja)
 
         with tabs[8]:
             st.header("Spiritual Chatbot")
@@ -714,10 +681,7 @@ def main():
             if st.button("Submit Query", key="chatbot_btn"):
                 with st.spinner("Consulting with the spirits..."):
                     response = spiritual_chatbot(query, sign, language_code)
-                    if response != handle_server_overload():
-                        st.markdown(response)
-                    else:
-                        st.error(response)
+                    st.markdown(response)
 
     else:
         st.info("👋 Please fill in your details in the sidebar to begin your spiritual journey.")
@@ -731,6 +695,7 @@ def main():
             your intuition and personal wisdom are your best guides on your spiritual journey.
             """
     )
+
 
 if __name__ == "__main__":
     main()
