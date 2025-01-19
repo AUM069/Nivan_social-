@@ -586,12 +586,12 @@ def display_zodiac_info(sign: str):
 
 def main():
     st.set_page_config(
-        page_title="SoulBuddy - AI Spiritual Guide",
+        page_title="Karmakode - AI Spiritual Guide",
         page_icon="🔮",
         layout="wide"
     )
 
-    st.title("🔮 SoulBuddy - Your AI Spiritual Guide")
+    st.title("🔮 Karmakode - Your AI Spiritual Guide")
 
     # Get user details
     name, dob, time_of_birth, gender, state, city, language_code = user_details_sidebar()
@@ -689,7 +689,7 @@ def main():
     st.markdown("---")
     st.markdown(
         f"""
-            💫 **SoulBuddy - Your AI Spiritual Guide**
+            💫 ** Karmakode - Your AI Spiritual Guide**
 
             Powered by advanced AI for personalized spiritual insights in {language_code}. Remember that while technology can provide guidance, 
             your intuition and personal wisdom are your best guides on your spiritual journey.
